@@ -221,14 +221,22 @@
       -webkit-user-drag: none;
     }
 
-    /* Overlay for click + target markers */
     #mapOverlay {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      pointer-events: none; /* clicks go through to the image */
+      pointer-events: none;
+    }
+
+    #countryOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
     }
 
     .marker {
@@ -246,7 +254,14 @@
     }
 
     .marker.target {
-      background: #18c964; /* green */
+      background: #18c964;
+    }
+
+    /* Optional: for debugging country polygons */
+    .country-shape {
+      fill: rgba(0, 123, 255, 0.13);
+      stroke: rgba(0, 123, 255, 0.3);
+      stroke-width: 1;
     }
 
     .nav-footer {
@@ -344,13 +359,51 @@
       <div class="question" id="mapQuestion">Press “New Country” to start.</div>
 
       <div class="map-wrapper" id="mapWrapper">
-        <!-- Local world map image (equirectangular). -->
-        <img
-          id="worldMap"
-          src="world.png"
-          alt="World Map"
-        />
-        <!-- Overlay for markers -->
+        <img id="worldMap" src="world.png" alt="World Map" />
+        <!-- Country polygons overlay (SVG) -->
+        <svg id="countryOverlay" viewBox="0 0 1000 500" preserveAspectRatio="none">
+          <!-- Rough shapes; tune these for your world.png -->
+          <g id="shapes">
+            <!-- Canada -->
+            <polygon id="shape-Canada" class="country-shape"
+                     points="150,60 350,60 450,90 450,150 350,160 250,160 150,140" />
+            <!-- United States -->
+            <polygon id="shape-United States" class="country-shape"
+                     points="170,160 350,160 420,170 420,210 350,220 220,220 170,210" />
+            <!-- Mexico -->
+            <polygon id="shape-Mexico" class="country-shape"
+                     points="220,220 300,240 280,280 220,280 190,250" />
+            <!-- Brazil -->
+            <polygon id="shape-Brazil" class="country-shape"
+                     points="350,260 420,260 440,310 400,360 350,340 330,300" />
+            <!-- France -->
+            <polygon id="shape-France" class="country-shape"
+                     points="520,160 550,160 560,190 540,210 520,200 510,180" />
+            <!-- Germany -->
+            <polygon id="shape-Germany" class="country-shape"
+                     points="550,130 580,130 590,160 580,190 550,190 540,160" />
+            <!-- Italy -->
+            <polygon id="shape-Italy" class="country-shape"
+                     points="560,190 580,190 590,220 580,240 560,230 550,210" />
+            <!-- Nigeria -->
+            <polygon id="shape-Nigeria" class="country-shape"
+                     points="540,260 570,260 580,290 560,310 540,300 530,280" />
+            <!-- South Africa -->
+            <polygon id="shape-South Africa" class="country-shape"
+                     points="560,330 600,330 610,360 590,390 560,380 550,350" />
+            <!-- Japan -->
+            <polygon id="shape-Japan" class="country-shape"
+                     points="780,170 800,170 810,190 800,210 780,210 770,190" />
+            <!-- Philippines -->
+            <polygon id="shape-Philippines" class="country-shape"
+                     points="750,210 770,210 780,240 770,270 750,260 740,230" />
+            <!-- Australia -->
+            <polygon id="shape-Australia" class="country-shape"
+                     points="780,320 840,320 860,360 840,400 780,390 760,350" />
+          </g>
+        </svg>
+
+        <!-- Markers overlay -->
         <div id="mapOverlay"></div>
       </div>
 
@@ -359,7 +412,7 @@
         <button id="btnMapStart" class="accent">New Country</button>
       </div>
       <p style="font-size:0.8rem;margin-top:4px;">
-        Tip: Zoom your browser if you want to tap more precisely.
+        Tip: Zoom your browser if you want to tap more precisely. Red dot = your guess, green dot = country center.
       </p>
     </section>
   </main>
@@ -424,7 +477,7 @@
   const btnMapStart = document.getElementById("btnMapStart");
   const worldMapImg = document.getElementById("worldMap");
   const mapOverlay = document.getElementById("mapOverlay");
-  const mapWrapper = document.getElementById("mapWrapper");
+  const countryOverlay = document.getElementById("countryOverlay");
 
   /************************************
    * Data: Languages & Countries
@@ -487,7 +540,6 @@
     "English"
   ];
 
-  // Country centers (approximate latitude / longitude)
   const countries = [
     { name: "Brazil",        region: "South America", lat: -14.2350, lng: -51.9253 },
     { name: "Mexico",        region: "North America", lat:  23.6345, lng: -102.5528 },
@@ -549,10 +601,9 @@
     return seconds.toFixed(1);
   }
 
-  // Haversine distance (km) between two lat/lng points
   function haversineDistance(lat1, lng1, lat2, lng2) {
-    const R = 6371; // Earth radius in km
-    const toRad = deg => deg * Math.PI / 180;
+    const R = 6371;
+    const toRad = d => d * Math.PI / 180;
     const dLat = toRad(lat2 - lat1);
     const dLng = toRad(lng2 - lng1);
     const a =
@@ -563,17 +614,15 @@
     return R * c;
   }
 
-  // Convert click on image to lat/lng assuming equirectangular projection
   function clickToLatLng(evt, img) {
     const rect = img.getBoundingClientRect();
-    const x = evt.clientX - rect.left;  // pixels from left
-    const y = evt.clientY - rect.top;   // pixels from top
-    const lon = (x / rect.width) * 360 - 180;   // -180 to 180
-    const lat = 90 - (y / rect.height) * 180;   // 90 to -90
+    const x = evt.clientX - rect.left;
+    const y = evt.clientY - rect.top;
+    const lon = (x / rect.width) * 360 - 180;
+    const lat = 90 - (y / rect.height) * 180;
     return { lat, lng: lon };
   }
 
-  // Convert lat/lng to pixel position relative to the image
   function latLngToPixel(lat, lng, img) {
     const rect = img.getBoundingClientRect();
     const x = ((lng + 180) / 360) * rect.width;
@@ -581,19 +630,52 @@
     return { x, y };
   }
 
-  // Clear markers from overlay
   function clearMarkers() {
     mapOverlay.innerHTML = "";
   }
 
-  // Add a marker to overlay
   function addMarker(x, y, type) {
     const marker = document.createElement("div");
     marker.classList.add("marker");
-    marker.classList.add(type); // 'guess' or 'target'
+    marker.classList.add(type);
     marker.style.left = `${x}px`;
     marker.style.top = `${y}px`;
     mapOverlay.appendChild(marker);
+  }
+
+  // Point-in-polygon helper for SVG polygons
+  function pointInPolygon(svgPoint, polygonElement) {
+    const polygon = polygonElement;
+    const points = polygon.points;
+    const x = svgPoint.x;
+    const y = svgPoint.y;
+    let inside = false;
+    for (let i = 0, j = points.numberOfItems - 1; i < points.numberOfItems; j = i++) {
+      const xi = points.getItem(i).x, yi = points.getItem(i).y;
+      const xj = points.getItem(j).x, yj = points.getItem(j).y;
+      const intersect = ((yi > y) !== (yj > y)) &&
+        (x < (xj - xi) * (y - yi) / (yj - yi + 0.00001) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function findCountryByPoint(evt) {
+    const pt = countryOverlay.createSVGPoint();
+    const rect = countryOverlay.getBoundingClientRect();
+    pt.x = ((evt.clientX - rect.left) / rect.width) * 1000;  // viewBox x
+    pt.y = ((evt.clientY - rect.top) / rect.height) * 500;   // viewBox y
+
+    const shapesGroup = document.getElementById("shapes");
+    for (const node of shapesGroup.children) {
+      if (node.tagName.toLowerCase() === "polygon") {
+        if (pointInPolygon(pt, node)) {
+          const id = node.id.replace("shape-", "");
+          return id; // country name
+        }
+      }
+    }
+    return null;
   }
 
   /************************************
@@ -615,20 +697,12 @@
   /************************************
    * Navigation
    ************************************/
-  navLobbyBtn.addEventListener("click", () => {
-    showScreen("screen-lobby");
-  });
-
-  navLanguageBtn.addEventListener("click", () => {
-    showScreen("screen-language");
-  });
-
-  navMapBtn.addEventListener("click", () => {
-    showScreen("screen-map");
-  });
+  navLobbyBtn.addEventListener("click", () => showScreen("screen-lobby"));
+  navLanguageBtn.addEventListener("click", () => showScreen("screen-language"));
+  navMapBtn.addEventListener("click", () => showScreen("screen-map"));
 
   /************************************
-   * Language Game Logic
+   * Language Game
    ************************************/
   let langTimerInterval = null;
 
@@ -697,10 +771,7 @@
       langFeedbackEl.classList.add("incorrect");
     }
 
-    Array.from(langOptionsEl.children).forEach(btn => {
-      btn.disabled = true;
-    });
-
+    Array.from(langOptionsEl.children).forEach(btn => btn.disabled = true);
     btnLangStart.disabled = false;
     btnLangNext.classList.remove("hidden");
   }
@@ -709,14 +780,13 @@
   btnLangNext.addEventListener("click", startLanguageRound);
 
   /************************************
-   * Map Game Logic (Real Map + Distance + Markers)
+   * Map Game
    ************************************/
   let mapTimerInterval = null;
 
   function startMapRound() {
     mapFeedbackEl.textContent = "";
     mapFeedbackEl.className = "feedback";
-
     clearMarkers();
 
     const idx = Math.floor(Math.random() * countries.length);
@@ -748,48 +818,62 @@
 
     clearMarkers();
 
-    // Guess lat/lng from click
-    const guess = clickToLatLng(evt, worldMapImg);
+    const guessCountryName = findCountryByPoint(evt);
     const target = state.mapCurrent;
-    const distanceKm = haversineDistance(guess.lat, guess.lng, target.lat, target.lng);
 
-    // Convert both to pixel positions for markers
-    const guessPx = latLngToPixel(guess.lat, guess.lng, worldMapImg);
+    // Convert click to lat/lng for fallback distance
+    const guessLatLng = clickToLatLng(evt, worldMapImg);
+    const distanceKm = haversineDistance(guessLatLng.lat, guessLatLng.lng, target.lat, target.lng);
+    const distanceText = distanceKm.toFixed(0);
+
+    // Marker positions
+    const guessPx = latLngToPixel(guessLatLng.lat, guessLatLng.lng, worldMapImg);
     const targetPx = latLngToPixel(target.lat, target.lng, worldMapImg);
-
     addMarker(guessPx.x, guessPx.y, "guess");
     addMarker(targetPx.x, targetPx.y, "target");
 
-    // Scoring by distance (tweakable)
     let points = 0;
-    if (distanceKm <= 300) points = 10;
-    else if (distanceKm <= 1000) points = 7;
-    else if (distanceKm <= 3000) points = 4;
-    else if (distanceKm <= 6000) points = 2;
+    let message;
 
-    const distanceText = distanceKm.toFixed(0);
-
-    if (points > 0) {
-      mapFeedbackEl.textContent =
-        `Nice! You were about ${distanceText} km from ${target.name}. ` +
-        `You earned ${points} point(s) in ${formatTime(elapsedSec)} s. (Red = your guess, Green = country)`;
+    if (guessCountryName === target.name) {
+      // If click falls inside the rough polygon for the target country,
+      // treat as "exact" hit regardless of real center distance.
+      points = 10;
+      message =
+        `Excellent! You clicked inside ${target.name}. Full 10 points in ${formatTime(elapsedSec)} s. ` +
+        `(Red = your guess, Green = country center)`;
       mapFeedbackEl.classList.remove("incorrect");
       mapFeedbackEl.classList.add("correct");
-      updateMyScore(points);
     } else {
-      mapFeedbackEl.textContent =
-        `You were about ${distanceText} km away from ${target.name}. ` +
-        `No points this time. Time: ${formatTime(elapsedSec)} s. (Red = your guess, Green = country)`;
-      mapFeedbackEl.classList.remove("correct");
-      mapFeedbackEl.classList.add("incorrect");
+      // Distance-based scoring fallback
+      if (distanceKm <= 300) points = 10;
+      else if (distanceKm <= 1000) points = 7;
+      else if (distanceKm <= 3000) points = 4;
+      else if (distanceKm <= 6000) points = 2;
+
+      if (points > 0) {
+        message =
+          `Nice! You were about ${distanceText} km from ${target.name}. ` +
+          `You earned ${points} point(s) in ${formatTime(elapsedSec)} s. (Red = your guess, Green = country center)`;
+        mapFeedbackEl.classList.remove("incorrect");
+        mapFeedbackEl.classList.add("correct");
+      } else {
+        message =
+          `You were about ${distanceText} km away from ${target.name}. ` +
+          `No points this time. Time: ${formatTime(elapsedSec)} s. (Red = your guess, Green = country center)`;
+        mapFeedbackEl.classList.remove("correct");
+        mapFeedbackEl.classList.add("incorrect");
+      }
     }
+
+    mapFeedbackEl.textContent = message;
+    if (points > 0) updateMyScore(points);
 
     state.mapCurrent = null;
     state.mapStartTime = null;
   }
 
   btnMapStart.addEventListener("click", startMapRound);
-
   worldMapImg.addEventListener("click", handleMapGuess);
 
   /************************************
