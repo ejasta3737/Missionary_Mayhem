@@ -210,8 +210,8 @@
       overflow: hidden;
       border: 1px solid #dee2e6;
       margin-bottom: 12px;
-      background: #000;
-      position: relative;
+      background: #e9ecef;
+      position: relative; /* needed for overlay */
     }
 
     .map-wrapper img {
@@ -219,6 +219,34 @@
       display: block;
       user-select: none;
       -webkit-user-drag: none;
+    }
+
+    /* Overlay for click + target markers */
+    #mapOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none; /* clicks go through to the image */
+    }
+
+    .marker {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 4px rgba(0,0,0,0.6);
+    }
+
+    .marker.guess {
+      background: red;
+    }
+
+    .marker.target {
+      background: #18c964; /* green */
     }
 
     .nav-footer {
@@ -305,7 +333,7 @@
       </div>
     </section>
 
-    <!-- COUNTRY MAP GAME (REAL MAP + DISTANCE) -->
+    <!-- COUNTRY MAP GAME -->
     <section id="screen-map" class="card hidden">
       <h2>Country Map</h2>
       <p>
@@ -315,15 +343,15 @@
       <div class="timer" id="mapTimer">Time: 0.0 s</div>
       <div class="question" id="mapQuestion">Press “New Country” to start.</div>
 
-      <div class="map-wrapper">
-        <!-- World map in Web Mercator style (approx). -->
-        <!-- IMPORTANT: scoring assumes this is an equirectangular/Web-Mercator-like projection:
-             x: -180° to 180°, y: 90° to -90°. -->
+      <div class="map-wrapper" id="mapWrapper">
+        <!-- Local world map image (equirectangular). -->
         <img
           id="worldMap"
-          src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/World_map_-_low_resolution.svg/1280px-World_map_-_low_resolution.svg.png"
+          src="world.png"
           alt="World Map"
         />
+        <!-- Overlay for markers -->
+        <div id="mapOverlay"></div>
       </div>
 
       <div class="feedback" id="mapFeedback"></div>
@@ -331,7 +359,7 @@
         <button id="btnMapStart" class="accent">New Country</button>
       </div>
       <p style="font-size:0.8rem;margin-top:4px;">
-        Tip: Zoom your browser with two fingers (on mobile) if you want to tap more precisely.
+        Tip: Zoom your browser if you want to tap more precisely.
       </p>
     </section>
   </main>
@@ -395,6 +423,8 @@
   const mapFeedbackEl = document.getElementById("mapFeedback");
   const btnMapStart = document.getElementById("btnMapStart");
   const worldMapImg = document.getElementById("worldMap");
+  const mapOverlay = document.getElementById("mapOverlay");
+  const mapWrapper = document.getElementById("mapWrapper");
 
   /************************************
    * Data: Languages & Countries
@@ -458,7 +488,6 @@
   ];
 
   // Country centers (approximate latitude / longitude)
-  // These are rough, but good for a game.
   const countries = [
     { name: "Brazil",        region: "South America", lat: -14.2350, lng: -51.9253 },
     { name: "Mexico",        region: "North America", lat:  23.6345, lng: -102.5528 },
@@ -542,6 +571,29 @@
     const lon = (x / rect.width) * 360 - 180;   // -180 to 180
     const lat = 90 - (y / rect.height) * 180;   // 90 to -90
     return { lat, lng: lon };
+  }
+
+  // Convert lat/lng to pixel position relative to the image
+  function latLngToPixel(lat, lng, img) {
+    const rect = img.getBoundingClientRect();
+    const x = ((lng + 180) / 360) * rect.width;
+    const y = ((90 - lat) / 180) * rect.height;
+    return { x, y };
+  }
+
+  // Clear markers from overlay
+  function clearMarkers() {
+    mapOverlay.innerHTML = "";
+  }
+
+  // Add a marker to overlay
+  function addMarker(x, y, type) {
+    const marker = document.createElement("div");
+    marker.classList.add("marker");
+    marker.classList.add(type); // 'guess' or 'target'
+    marker.style.left = `${x}px`;
+    marker.style.top = `${y}px`;
+    mapOverlay.appendChild(marker);
   }
 
   /************************************
@@ -657,13 +709,15 @@
   btnLangNext.addEventListener("click", startLanguageRound);
 
   /************************************
-   * Map Game Logic (Real Map + Distance Scoring)
+   * Map Game Logic (Real Map + Distance + Markers)
    ************************************/
   let mapTimerInterval = null;
 
   function startMapRound() {
     mapFeedbackEl.textContent = "";
     mapFeedbackEl.className = "feedback";
+
+    clearMarkers();
 
     const idx = Math.floor(Math.random() * countries.length);
     state.mapCurrent = countries[idx];
@@ -692,17 +746,21 @@
     clearInterval(mapTimerInterval);
     mapTimerInterval = null;
 
-    // Convert click to lat/lng
+    clearMarkers();
+
+    // Guess lat/lng from click
     const guess = clickToLatLng(evt, worldMapImg);
     const target = state.mapCurrent;
     const distanceKm = haversineDistance(guess.lat, guess.lng, target.lat, target.lng);
 
-    // Scoring by distance (you can tweak these thresholds)
-    // 0–300 km: 10 pts
-    // 300–1000 km: 7 pts
-    // 1000–3000 km: 4 pts
-    // 3000–6000 km: 2 pts
-    // >6000 km: 0 pts
+    // Convert both to pixel positions for markers
+    const guessPx = latLngToPixel(guess.lat, guess.lng, worldMapImg);
+    const targetPx = latLngToPixel(target.lat, target.lng, worldMapImg);
+
+    addMarker(guessPx.x, guessPx.y, "guess");
+    addMarker(targetPx.x, targetPx.y, "target");
+
+    // Scoring by distance (tweakable)
     let points = 0;
     if (distanceKm <= 300) points = 10;
     else if (distanceKm <= 1000) points = 7;
@@ -714,26 +772,24 @@
     if (points > 0) {
       mapFeedbackEl.textContent =
         `Nice! You were about ${distanceText} km from ${target.name}. ` +
-        `You earned ${points} point(s) in ${formatTime(elapsedSec)} s.`;
+        `You earned ${points} point(s) in ${formatTime(elapsedSec)} s. (Red = your guess, Green = country)`;
       mapFeedbackEl.classList.remove("incorrect");
       mapFeedbackEl.classList.add("correct");
       updateMyScore(points);
     } else {
       mapFeedbackEl.textContent =
         `You were about ${distanceText} km away from ${target.name}. ` +
-        `No points this time. Time: ${formatTime(elapsedSec)} s.`;
+        `No points this time. Time: ${formatTime(elapsedSec)} s. (Red = your guess, Green = country)`;
       mapFeedbackEl.classList.remove("correct");
       mapFeedbackEl.classList.add("incorrect");
     }
 
-    // End round
     state.mapCurrent = null;
     state.mapStartTime = null;
   }
 
   btnMapStart.addEventListener("click", startMapRound);
 
-  // Handle clicks/taps on the map
   worldMapImg.addEventListener("click", handleMapGuess);
 
   /************************************
