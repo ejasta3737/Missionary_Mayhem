@@ -125,10 +125,6 @@
       background: var(--accent);
     }
 
-    button.danger {
-      background: var(--danger);
-    }
-
     .btn-row {
       display: flex;
       gap: 8px;
@@ -401,554 +397,66 @@
         Red dot = your guess, green dot = country center.
       </p>
     </section>
+
+    <!-- SCRIPTURE QUIZ GAME -->
+    <section id="screen-scripture" class="card hidden">
+      <h2>Scripture Quiz</h2>
+      <p>
+        Read the scripture and answer the question about it.
+      </p>
+      <div class="timer" id="scriptureTimer">Time: 0.0 s</div>
+      <div class="question" id="scripturePrompt"></div>
+      <blockquote id="scriptureText"
+                  style="font-size:0.9rem;margin:8px 0;padding-left:10px;border-left:3px solid #dee2e6;"></blockquote>
+      <div class="options" id="scriptureOptions"></div>
+      <div class="feedback" id="scriptureFeedback"></div>
+      <div style="margin-top:10px;" class="btn-row">
+        <button id="btnScriptureStart" class="accent">Start Round</button>
+        <button id="btnScriptureNext" class="secondary hidden">Next</button>
+      </div>
+    </section>
   </main>
 
   <div class="nav-footer hidden" id="navFooter">
     <button id="navLobby">Lobby</button>
     <button id="navLanguage">Language Game</button>
     <button id="navMap">Country Game</button>
+    <button id="navScripture">Scripture Quiz</button>
+    <button id="navTemple">Temple Quiz</button>
   </div>
 </div>
 
-<script>
-  /************************************
-   * Basic State
-   ************************************/
-  /************************************
- * CONFIG: adjust these to change round lengths
- ************************************/
-  const LANG_QUESTIONS_PER_ROUND = 5; // language questions per round
-  const MAP_COUNTRIES_PER_ROUND = 5; // country questions per round
-  const state = {
-    username: null,
-    myScore: 0,
-    leaderboard: [
-      { name: "DemoMissionary1", score: 15 },
-      { name: "DemoMissionary2", score: 9 },
-      { name: "DemoMissionary3", score: 7 },
-    ],
-    langCurrent: null,
-    langStartTime: null,
-    mapCurrent: null,
-    mapStartTime: null,
-    langQueue: [],
-    countryQueue: [],
-    mapRoundActive: false  // controls whether clicks are guesses
-  };
-
-  /************************************
-   * DOM Elements
-   ************************************/
-  const screenLogin = document.getElementById("screen-login");
-  const screenLobby = document.getElementById("screen-lobby");
-  const screenLanguage = document.getElementById("screen-language");
-  const screenMap = document.getElementById("screen-map");
-  const navFooter = document.getElementById("navFooter");
-
-  const usernameInput = document.getElementById("usernameInput");
-  const btnStart = document.getElementById("btnStart");
-  const headerUsername = document.getElementById("headerUsername");
-  const myScoreEl = document.getElementById("myScore");
-  const leaderboardList = document.getElementById("leaderboardList");
-
-  const navLobbyBtn = document.getElementById("navLobby");
-  const navLanguageBtn = document.getElementById("navLanguage");
-  const navMapBtn = document.getElementById("navMap");
-
-  const langTimerEl = document.getElementById("langTimer");
-  const langQuestionEl = document.getElementById("langQuestion");
-  const langOptionsEl = document.getElementById("langOptions");
-  const langFeedbackEl = document.getElementById("langFeedback");
-  const btnLangStart = document.getElementById("btnLangStart");
-  const btnLangNext = document.getElementById("btnLangNext");
-
-  const mapTimerEl = document.getElementById("mapTimer");
-  const mapQuestionEl = document.getElementById("mapQuestion");
-  const mapFeedbackEl = document.getElementById("mapFeedback");
-  const worldMapImg = document.getElementById("worldMap");
-  const mapOverlay = document.getElementById("mapOverlay");
-  const countryOverlay = document.getElementById("countryOverlay");
-
-  /************************************
-   * Data
-   ************************************/
-  const languagePhrases = [
-    { phrase: "Hola", meaning: "Hello", language: "Spanish" },
-    { phrase: "Bonjour", meaning: "Hello", language: "French" },
-    { phrase: "Olá", meaning: "Hello", language: "Portuguese" },
-    { phrase: "Hallo", meaning: "Hello", language: "German" },
-    { phrase: "Ciao", meaning: "Hello", language: "Italian" },
-    { phrase: "Konnichiwa", meaning: "Hello", language: "Japanese" },
-    { phrase: "你好 (Nǐ hǎo)", meaning: "Hello", language: "Mandarin Chinese" },
-
-    { phrase: "Gracias", meaning: "Thank you", language: "Spanish" },
-    { phrase: "Merci", meaning: "Thank you", language: "French" },
-    { phrase: "Obrigado/Obrigada", meaning: "Thank you", language: "Portuguese" },
-    { phrase: "Danke", meaning: "Thank you", language: "German" },
-    { phrase: "Grazie", meaning: "Thank you", language: "Italian" },
-
-    { phrase: "Sí", meaning: "Yes", language: "Spanish" },
-    { phrase: "Oui", meaning: "Yes", language: "French" },
-    { phrase: "Sim", meaning: "Yes", language: "Portuguese" },
-    { phrase: "Ja", meaning: "Yes", language: "German" },
-
-    { phrase: "No", meaning: "No", language: "Spanish" },
-    { phrase: "Non", meaning: "No", language: "French" },
-    { phrase: "Não", meaning: "No", language: "Portuguese" },
-    { phrase: "Nein", meaning: "No", language: "German" },
-
-    {
-      phrase: "La Iglesia de Jesucristo de los Santos de los Últimos Días",
-      meaning: "The Church of Jesus Christ of Latter-day Saints",
-      language: "Spanish"
-    },
-    {
-      phrase: "L'Église de Jésus-Christ des Saints des Derniers Jours",
-      meaning: "The Church of Jesus Christ of Latter-day Saints",
-      language: "French"
-    },
-    {
-      phrase: "A Igreja de Jesus Cristo dos Santos dos Últimos Dias",
-      meaning: "The Church of Jesus Christ of Latter-day Saints",
-      language: "Portuguese"
-    },
-    {
-      phrase: "Die Kirche Jesu Christi der Heiligen der Letzten Tage",
-      meaning: "The Church of Jesus Christ of Latter-day Saints",
-      language: "German"
-    }
-  ];
-
-  const languages = [
-    "Spanish",
-    "French",
-    "Portuguese",
-    "German",
-    "Italian",
-    "Japanese",
-    "Mandarin Chinese",
-    "English"
-  ];
-
-  const countries = [
-    { name: "Brazil",        region: "South America", lat: -14.2350, lng: -51.9253 },
-    { name: "Mexico",        region: "North America", lat:  23.6345, lng: -102.5528 },
-    { name: "United States", region: "North America", lat:  39.8283, lng: -98.5795 },
-    { name: "Canada",        region: "North America", lat:  56.1304, lng: -106.3468 },
-    { name: "France",        region: "Europe",        lat:  46.2276, lng:   2.2137 },
-    { name: "Germany",       region: "Europe",        lat:  51.1657, lng:  10.4515 },
-    { name: "Italy",         region: "Europe",        lat:  41.8719, lng:  12.5674 },
-    { name: "Nigeria",       region: "Africa",        lat:   9.0820, lng:   8.6753 },
-    { name: "South Africa",  region: "Africa",        lat: -30.5595, lng:  22.9375 },
-    { name: "Japan",         region: "Asia",          lat:  36.2048, lng: 138.2529 },
-    { name: "Philippines",   region: "Asia",          lat:  12.8797, lng: 121.7740 },
-    { name: "Australia",     region: "Oceania",       lat: -25.2744, lng: 133.7751 }
-  ];
-const scriptures = [
-    { prophet: "Nephi", scripture_contents: "I will go and do the things which the Lord hath commanded", book: "1 Nephi", chapter: 3, verse: 7 },
-    { prophet: "Moses", scripture_contents: "For behold, this is my work and my glory-to bring to pass the immortality and eternal life of man", book: "Moses", chapter: 1, verse: 39 },
-    { prophet: "Moses", scripture_contents: "thou shalt love they neighbor as thyself", book: "Leviticus", chapter: 19, verse: 18 },
-    { prophet: "David", scripture_contents: "Trust in the Lord with all thine heart", book: "Proverbs", chapter: 3, verse: 5 },
-    { prophet: "James", scripture_contents: "If any of you lack wisdom, let him ask of God", book: "James", chapter: 1, verse: 5 },
-    { prophet: "John", scripture_contents: "I saw another angel fly in the midst of heaven, having the everlasting gospel", book: "Revelation", chapter: 14, verse: 6 },
-    { prophet: "Moroni", scripture_contents: "And if men come unto me I will show unto them their weakness... and my grace is sufficient for all men that humble themselves before me", book: "Ether", chapter: 12, verse: 27 },
-    { prophet: "Amulek", scripture_contents: "For behold, this life is the time for men to prepare to meet God", book: "Alma", chapter: 34, verse: 32 },
-    { prophet: "Moroni", scripture_contents: "And if men come unto me I will show unto them their weakness... and my grace is sufficient for all men that humble themselves before me", book: "Ether", chapter: 12, verse: 27 },
-    { prophet: "King Benjamin", scripture_contents: "Watch your yourselves, your thoughts, your words and yourdeeds", book: "Mosiah", chapter: 4, verse: 30 },
-    { prophet: "John", scripture_contents: "For God so loved the world that He gave His Only Begotten Son", book: "John", chapter: 3, verse: 16 }
-  ];
-  /************************************
-   * Utility
-   ************************************/
-  function showScreen(id) {
-    [screenLogin, screenLobby, screenLanguage, screenMap].forEach(s => s.classList.add("hidden"));
-    document.getElementById(id).classList.remove("hidden");
-  }
-
-  function updateHeaderUsername() {
-    headerUsername.textContent = state.username || "Guest";
-  }
-
-  function updateMyScore(points = 0) {
-    state.myScore += points;
-    myScoreEl.textContent = state.myScore;
-    const existing = state.leaderboard.find(p => p.name === state.username);
-    if (existing) existing.score = state.myScore;
-    else if (state.username) state.leaderboard.push({ name: state.username, score: state.myScore });
-    renderLeaderboard();
-  }
-
-  function renderLeaderboard() {
-    const sorted = [...state.leaderboard].sort((a, b) => b.score - a.score).slice(0, 10);
-    leaderboardList.innerHTML = "";
-    sorted.forEach(player => {
-      const li = document.createElement("li");
-      const nameSpan = document.createElement("span");
-      nameSpan.textContent = player.name;
-      const scoreSpan = document.createElement("span");
-      scoreSpan.textContent = player.score;
-      li.appendChild(nameSpan);
-      li.appendChild(scoreSpan);
-      leaderboardList.appendChild(li);
-    });
-  }
-
-  function formatTime(seconds) {
-    return seconds.toFixed(1);
-  }
-
-  function haversineDistance(lat1, lng1, lat2, lng2) {
-    const R = 6371;
-    const toRad = d => d * Math.PI / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-      Math.sin(dLng / 2) ** 2;
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }
-
-  function clickToLatLng(evt, img) {
-    const rect = img.getBoundingClientRect();
-    const x = evt.clientX - rect.left;
-    const y = evt.clientY - rect.top;
-    const lon = (x / rect.width) * 360 - 180;
-    const lat = 90 - (y / rect.height) * 180;
-    return { lat, lng: lon };
-  }
-
-  function latLngToPixel(lat, lng, img) {
-    const rect = img.getBoundingClientRect();
-    const x = ((lng + 180) / 360) * rect.width;
-    const y = ((90 - lat) / 180) * rect.height;
-    return { x, y };
-  }
-
-  function clearMarkers() {
-    mapOverlay.innerHTML = "";
-  }
-
-  function addMarker(x, y, type) {
-    const marker = document.createElement("div");
-    marker.classList.add("marker", type);
-    marker.style.left = `${x}px`;
-    marker.style.top = `${y}px`;
-    mapOverlay.appendChild(marker);
-  }
-
-  function pointInPolygon(svgPoint, polygonElement) {
-    const points = polygonElement.points;
-    const x = svgPoint.x;
-    const y = svgPoint.y;
-    let inside = false;
-    for (let i = 0, j = points.numberOfItems - 1; i < points.numberOfItems; j = i++) {
-      const xi = points.getItem(i).x, yi = points.getItem(i).y;
-      const xj = points.getItem(j).x, yj = points.getItem(j).y;
-      const intersect = ((yi > y) !== (yj > y)) &&
-        (x < (xj - xi) * (y - yi) / (yj - yi + 0.00001) + xi);
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-
-  function findCountryByPoint(evt) {
-    const pt = countryOverlay.createSVGPoint();
-    const rect = countryOverlay.getBoundingClientRect();
-    pt.x = ((evt.clientX - rect.left) / rect.width) * 1000;
-    pt.y = ((evt.clientY - rect.top) / rect.height) * 500;
-    const shapesGroup = document.getElementById("shapes");
-    for (const node of shapesGroup.children) {
-      if (node.tagName.toLowerCase() === "polygon") {
-        if (pointInPolygon(pt, node)) {
-          return node.id.replace("shape-", "");
-        }
-      }
-    }
-    return null;
-  }
-
-  function shuffledCopy(arr) {
-    const copy = [...arr];
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
-  }
-
-  /************************************
-   * Login
-   ************************************/
-  btnStart.addEventListener("click", () => {
-    const value = usernameInput.value.trim();
-    if (!value) {
-      alert("Please enter a username.");
-      return;
-    }
-    state.username = value;
-    updateHeaderUsername();
-    navFooter.classList.remove("hidden");
-    showScreen("screen-lobby");
-    renderLeaderboard();
-  });
-
-  /************************************
-   * Navigation
-   ************************************/
-  navLobbyBtn.addEventListener("click", () => showScreen("screen-lobby"));
-  navLanguageBtn.addEventListener("click", () => showScreen("screen-language"));
-  navMapBtn.addEventListener("click", () => {
-    showScreen("screen-map");
-    mapFeedbackEl.textContent = "";
-    mapQuestionEl.textContent = "Tap anywhere to start a round.";
-    clearMarkers();
-    state.mapRoundActive = false;
-    state.mapCurrent = null;
-    state.countryQueue = [];
-    if (mapTimerInterval) {
-      clearInterval(mapTimerInterval);
-      mapTimerInterval = null;
-      mapTimerEl.textContent = "Time: 0.0 s";
-    }
-  });
-
-  /************************************
-   * Language Game
-   ************************************/
-  let langTimerInterval = null;
-
-  function resetLanguageRoundQueue() {
-  // Shuffle all phrases, then take only the first N
-  const shuffled = shuffledCopy(languagePhrases);
-  state.langQueue = shuffled.slice(0, LANG_QUESTIONS_PER_ROUND);
-}
-
-  function startLanguageRound() {
-    if (!state.langQueue || state.langQueue.length === 0) {
-      resetLanguageRoundQueue();
-    }
-    if (state.langQueue.length === 0) {
-      langFeedbackEl.textContent = "No language phrases available.";
-      return;
-    }
-
-    langFeedbackEl.textContent = "";
-    langFeedbackEl.className = "feedback";
-    btnLangNext.classList.add("hidden");
-    btnLangStart.disabled = true;
-
-    state.langCurrent = state.langQueue.shift();
-
-    langQuestionEl.textContent =
-      `"${state.langCurrent.phrase}" means "${state.langCurrent.meaning}". Which language is this?`;
-
-    const options = new Set();
-    options.add(state.langCurrent.language);
-    while (options.size < 4 && options.size < languages.length) {
-      const randomLang = languages[Math.floor(Math.random() * languages.length)];
-      options.add(randomLang);
-    }
-    const optionList = Array.from(options).sort(() => Math.random() - 0.5);
-
-    langOptionsEl.innerHTML = "";
-    optionList.forEach(lang => {
-      const btn = document.createElement("button");
-      btn.textContent = lang;
-      btn.addEventListener("click", () => handleLangAnswer(lang));
-      langOptionsEl.appendChild(btn);
-    });
-
-    if (langTimerInterval) clearInterval(langTimerInterval);
-    const start = performance.now();
-    state.langStartTime = start;
-    langTimerInterval = setInterval(() => {
-      const now = performance.now();
-      const elapsed = (now - start) / 1000;
-      langTimerEl.textContent = "Time: " + formatTime(elapsed) + " s";
-    }, 100);
-  }
-
-  function endLanguageRoundIfDone() {
-    if (state.langQueue.length === 0) {
-      langFeedbackEl.textContent += " | Round complete! Returning to lobby...";
-      setTimeout(() => showScreen("screen-lobby"), 1500);
-      btnLangStart.disabled = false;
-      btnLangNext.classList.add("hidden");
-      return true;
-    }
-    return false;
-  }
-
-  function handleLangAnswer(selectedLang) {
-    if (!state.langCurrent || !state.langStartTime) return;
-
-    const end = performance.now();
-    const elapsedSec = (end - state.langStartTime) / 1000;
-
-    clearInterval(langTimerInterval);
-    langTimerInterval = null;
-
-    const correct = selectedLang === state.langCurrent.language;
-    let points = 0;
-
-    if (correct) {
-      if (elapsedSec <= 3) points = 5;
-      else if (elapsedSec <= 6) points = 3;
-      else points = 1;
-
-      langFeedbackEl.textContent =
-        `Correct! It was ${state.langCurrent.language}. You earned ${points} point(s) in ${formatTime(elapsedSec)} s.`;
-      langFeedbackEl.classList.add("correct");
-      updateMyScore(points);
-    } else {
-      langFeedbackEl.textContent =
-        `Not quite. It was ${state.langCurrent.language}. Time: ${formatTime(elapsedSec)} s.`;
-      langFeedbackEl.classList.add("incorrect");
-    }
-
-    Array.from(langOptionsEl.children).forEach(btn => btn.disabled = true);
-
-    if (!endLanguageRoundIfDone()) {
-      btnLangStart.disabled = false;
-      btnLangNext.classList.remove("hidden");
-    }
-  }
-
-  btnLangStart.addEventListener("click", () => {
-    resetLanguageRoundQueue();
-    startLanguageRound();
-  });
-
-  btnLangNext.addEventListener("click", startLanguageRound);
-
-  /************************************
-   * Map Game
-   ************************************/
-  let mapTimerInterval = null;
-
-  function resetCountryRoundQueue() {
-  // Shuffle all countries, then take only the first N
-  const shuffled = shuffledCopy(countries);
-  state.countryQueue = shuffled.slice(0, MAP_COUNTRIES_PER_ROUND);
-}
-
-  function startFirstCountryRound() {
-    resetCountryRoundQueue();
-    state.mapRoundActive = true;
-    loadNextCountry();
-  }
-
-  function loadNextCountry() {
-    clearMarkers();
-    mapFeedbackEl.textContent = "";
-
-    if (!state.countryQueue || state.countryQueue.length === 0) {
-      // Round done
-      state.mapRoundActive = false;
-      state.mapCurrent = null;
-      mapQuestionEl.textContent = "Round complete! Returning to lobby...";
-      if (mapTimerInterval) {
-        clearInterval(mapTimerInterval);
-        mapTimerInterval = null;
-      }
-      setTimeout(() => showScreen("screen-lobby"), 1500);
-      return;
-    }
-
-    state.mapCurrent = state.countryQueue.shift();
-    mapQuestionEl.textContent =
-      `Tap: ${state.mapCurrent.name} (Region: ${state.mapCurrent.region})`;
-
-    if (mapTimerInterval) clearInterval(mapTimerInterval);
-    const start = performance.now();
-    state.mapStartTime = start;
-    mapTimerInterval = setInterval(() => {
-      const now = performance.now();
-      const elapsed = (now - start) / 1000;
-      mapTimerEl.textContent = "Time: " + formatTime(elapsed) + " s";
-    }, 100);
-  }
-
-  function handleMapGuess(evt) {
-    // If no round yet, start entire round (all countries)
-    if (!state.mapRoundActive) {
-      startFirstCountryRound();
-      // After starting, this click should still count as a guess for the first country
-      // So continue through without returning.
-    }
-
-    if (!state.mapCurrent || !state.mapStartTime) {
-      return;
-    }
-
-    const end = performance.now();
-    const elapsedSec = (end - state.mapStartTime) / 1000;
-    clearInterval(mapTimerInterval);
-    mapTimerInterval = null;
-
-    clearMarkers();
-
-    const guessCountryName = findCountryByPoint(evt);
-    const target = state.mapCurrent;
-
-    const guessLatLng = clickToLatLng(evt, worldMapImg);
-    const distanceKm = haversineDistance(guessLatLng.lat, guessLatLng.lng, target.lat, target.lng);
-    const distanceText = distanceKm.toFixed(0);
-
-    const guessPx = latLngToPixel(guessLatLng.lat, guessLatLng.lng, worldMapImg);
-    const targetPx = latLngToPixel(target.lat, target.lng, worldMapImg);
-    addMarker(guessPx.x, guessPx.y, "guess");
-    addMarker(targetPx.x, targetPx.y, "target");
-
-    let points = 0;
-    let message;
-
-    if (guessCountryName === target.name) {
-      points = 10;
-      message =
-        `Excellent! You clicked inside ${target.name}. Full 10 points in ${formatTime(elapsedSec)} s.`;
-      mapFeedbackEl.classList.remove("incorrect");
-      mapFeedbackEl.classList.add("correct");
-    } else {
-      if (distanceKm <= 300) points = 10;
-      else if (distanceKm <= 1000) points = 7;
-      else if (distanceKm <= 3000) points = 4;
-      else if (distanceKm <= 6000) points = 2;
-
-      if (points > 0) {
-        message =
-          `Nice! You were about ${distanceText} km from ${target.name}. ` +
-          `You earned ${points} point(s) in ${formatTime(elapsedSec)} s.`;
-        mapFeedbackEl.classList.remove("incorrect");
-        mapFeedbackEl.classList.add("correct");
-      } else {
-        message =
-          `You were about ${distanceText} km away from ${target.name}. ` +
-          `No points this time. Time: ${formatTime(elapsedSec)} s.`;
-        mapFeedbackEl.classList.remove("correct");
-        mapFeedbackEl.classList.add("incorrect");
-      }
-    }
-
-    mapFeedbackEl.textContent = message;
-    if (points > 0) updateMyScore(points);
-
-    // Move to next country automatically
-    state.mapCurrent = null;
-    state.mapStartTime = null;
-
-    // Brief pause so they can see markers, then load next
-    setTimeout(loadNextCountry, 900);
-  }
-
-  worldMapImg.addEventListener("click", handleMapGuess);
-
-  /************************************
-   * Init
-   ************************************/
-  renderLeaderboard();
-</script>
+    <!-- TEMPLE QUIZ GAME -->
+    <section id="screen-temple" class="card hidden">
+      <h2>Temple Quiz</h2>
+      <p>
+        Look at the temple and choose which one it is.
+      </p>
+      <div class="timer" id="templeTimer">Time: 0.0 s</div>
+      <div class="question" id="templePrompt">
+        Press "Start Round" to begin.
+      </div>
+
+      <div class="map-wrapper" id="templeWrapper" style="margin-bottom:12px;">
+        <img id="templeImage" src="" alt="Temple" style="width:100%;display:block;" />
+      </div>
+
+      <div class="options" id="templeOptions"></div>
+      <div class="feedback" id="templeFeedback"></div>
+      <div style="margin-top:10px;" class="btn-row">
+        <button id="btnTempleStart" class="accent">Start Round</button>
+        <button id="btnTempleNext" class="secondary hidden">Next</button>
+      </div>
+      <p style="font-size:0.8rem;margin-top:4px;">
+        Make sure the temple images (e.g., MesaTemple.jpg) are in the same folder as index.html.
+      </p>
+    </section>
+
+<!-- JS: core first, then individual games -->
+<script src="js/core.js"></script>
+<script src="js/game-language.js"></script>
+<script src="js/game-map.js"></script>
+<script src="js/game-scripture.js"></script>
+<script src="js/game-temples.js"></script>
 </body>
 </html>
