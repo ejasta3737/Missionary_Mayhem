@@ -211,7 +211,7 @@
       border: 1px solid #dee2e6;
       margin-bottom: 12px;
       background: #e9ecef;
-      position: relative; /* needed for overlay */
+      position: relative;
     }
 
     .map-wrapper img {
@@ -257,7 +257,6 @@
       background: #18c964;
     }
 
-    /* Optional: for debugging country polygons */
     .country-shape {
       fill: rgba(0, 123, 255, 0.13);
       stroke: rgba(0, 123, 255, 0.3);
@@ -356,48 +355,38 @@
       </p>
 
       <div class="timer" id="mapTimer">Time: 0.0 s</div>
-      <div class="question" id="mapQuestion">Press “New Country” to start.</div>
+      <div class="question" id="mapQuestion">
+        Tap anywhere to start a round.
+      </div>
 
       <div class="map-wrapper" id="mapWrapper">
         <img id="worldMap" src="world.png" alt="World Map" />
-        <!-- Country polygons overlay (SVG) -->
+
+        <!-- Country polygons overlay -->
         <svg id="countryOverlay" viewBox="0 0 1000 500" preserveAspectRatio="none">
-          <!-- Rough shapes; tune these for your world.png -->
           <g id="shapes">
-            <!-- Canada -->
             <polygon id="shape-Canada" class="country-shape"
                      points="150,60 350,60 450,90 450,150 350,160 250,160 150,140" />
-            <!-- United States -->
             <polygon id="shape-United States" class="country-shape"
                      points="170,160 350,160 420,170 420,210 350,220 220,220 170,210" />
-            <!-- Mexico -->
             <polygon id="shape-Mexico" class="country-shape"
                      points="220,220 300,240 280,280 220,280 190,250" />
-            <!-- Brazil -->
             <polygon id="shape-Brazil" class="country-shape"
                      points="350,260 420,260 440,310 400,360 350,340 330,300" />
-            <!-- France -->
             <polygon id="shape-France" class="country-shape"
                      points="520,160 550,160 560,190 540,210 520,200 510,180" />
-            <!-- Germany -->
             <polygon id="shape-Germany" class="country-shape"
                      points="550,130 580,130 590,160 580,190 550,190 540,160" />
-            <!-- Italy -->
             <polygon id="shape-Italy" class="country-shape"
                      points="560,190 580,190 590,220 580,240 560,230 550,210" />
-            <!-- Nigeria -->
             <polygon id="shape-Nigeria" class="country-shape"
                      points="540,260 570,260 580,290 560,310 540,300 530,280" />
-            <!-- South Africa -->
             <polygon id="shape-South Africa" class="country-shape"
                      points="560,330 600,330 610,360 590,390 560,380 550,350" />
-            <!-- Japan -->
             <polygon id="shape-Japan" class="country-shape"
                      points="780,170 800,170 810,190 800,210 780,210 770,190" />
-            <!-- Philippines -->
             <polygon id="shape-Philippines" class="country-shape"
                      points="750,210 770,210 780,240 770,270 750,260 740,230" />
-            <!-- Australia -->
             <polygon id="shape-Australia" class="country-shape"
                      points="780,320 840,320 860,360 840,400 780,390 760,350" />
           </g>
@@ -408,16 +397,12 @@
       </div>
 
       <div class="feedback" id="mapFeedback"></div>
-      <div style="margin-top:10px;" class="btn-row">
-        <button id="btnMapStart" class="accent">New Country</button>
-      </div>
       <p style="font-size:0.8rem;margin-top:4px;">
-        Tip: Zoom your browser if you want to tap more precisely. Red dot = your guess, green dot = country center.
+        Red dot = your guess, green dot = country center.
       </p>
     </section>
   </main>
 
-  <!-- NAVIGATION FOOTER -->
   <div class="nav-footer hidden" id="navFooter">
     <button id="navLobby">Lobby</button>
     <button id="navLanguage">Language Game</button>
@@ -429,6 +414,11 @@
   /************************************
    * Basic State
    ************************************/
+  /************************************
+ * CONFIG: adjust these to change round lengths
+ ************************************/
+  const LANG_QUESTIONS_PER_ROUND = 5; // language questions per round
+  const MAP_COUNTRIES_PER_ROUND = 5; // country questions per round
   const state = {
     username: null,
     myScore: 0,
@@ -441,6 +431,9 @@
     langStartTime: null,
     mapCurrent: null,
     mapStartTime: null,
+    langQueue: [],
+    countryQueue: [],
+    mapRoundActive: false  // controls whether clicks are guesses
   };
 
   /************************************
@@ -462,7 +455,6 @@
   const navLanguageBtn = document.getElementById("navLanguage");
   const navMapBtn = document.getElementById("navMap");
 
-  // Language game
   const langTimerEl = document.getElementById("langTimer");
   const langQuestionEl = document.getElementById("langQuestion");
   const langOptionsEl = document.getElementById("langOptions");
@@ -470,17 +462,15 @@
   const btnLangStart = document.getElementById("btnLangStart");
   const btnLangNext = document.getElementById("btnLangNext");
 
-  // Map game
   const mapTimerEl = document.getElementById("mapTimer");
   const mapQuestionEl = document.getElementById("mapQuestion");
   const mapFeedbackEl = document.getElementById("mapFeedback");
-  const btnMapStart = document.getElementById("btnMapStart");
   const worldMapImg = document.getElementById("worldMap");
   const mapOverlay = document.getElementById("mapOverlay");
   const countryOverlay = document.getElementById("countryOverlay");
 
   /************************************
-   * Data: Languages & Countries
+   * Data
    ************************************/
   const languagePhrases = [
     { phrase: "Hola", meaning: "Hello", language: "Spanish" },
@@ -554,14 +544,24 @@
     { name: "Philippines",   region: "Asia",          lat:  12.8797, lng: 121.7740 },
     { name: "Australia",     region: "Oceania",       lat: -25.2744, lng: 133.7751 }
   ];
-
+const scriptures = [
+    { prophet: "Nephi", scripture_contents: "I will go and do the things which the Lord hath commanded", book: "1 Nephi", chapter: 3, verse: 7 },
+    { prophet: "Moses", scripture_contents: "For behold, this is my work and my glory-to bring to pass the immortality and eternal life of man", book: "Moses", chapter: 1, verse: 39 },
+    { prophet: "Moses", scripture_contents: "thou shalt love they neighbor as thyself", book: "Leviticus", chapter: 19, verse: 18 },
+    { prophet: "David", scripture_contents: "Trust in the Lord with all thine heart", book: "Proverbs", chapter: 3, verse: 5 },
+    { prophet: "James", scripture_contents: "If any of you lack wisdom, let him ask of God", book: "James", chapter: 1, verse: 5 },
+    { prophet: "John", scripture_contents: "I saw another angel fly in the midst of heaven, having the everlasting gospel", book: "Revelation", chapter: 14, verse: 6 },
+    { prophet: "Moroni", scripture_contents: "And if men come unto me I will show unto them their weakness... and my grace is sufficient for all men that humble themselves before me", book: "Ether", chapter: 12, verse: 27 },
+    { prophet: "Amulek", scripture_contents: "For behold, this life is the time for men to prepare to meet God", book: "Alma", chapter: 34, verse: 32 },
+    { prophet: "Moroni", scripture_contents: "And if men come unto me I will show unto them their weakness... and my grace is sufficient for all men that humble themselves before me", book: "Ether", chapter: 12, verse: 27 },
+    { prophet: "King Benjamin", scripture_contents: "Watch your yourselves, your thoughts, your words and yourdeeds", book: "Mosiah", chapter: 4, verse: 30 },
+    { prophet: "John", scripture_contents: "For God so loved the world that He gave His Only Begotten Son", book: "John", chapter: 3, verse: 16 }
+  ];
   /************************************
-   * Utility Functions
+   * Utility
    ************************************/
   function showScreen(id) {
-    [screenLogin, screenLobby, screenLanguage, screenMap].forEach(s => {
-      s.classList.add("hidden");
-    });
+    [screenLogin, screenLobby, screenLanguage, screenMap].forEach(s => s.classList.add("hidden"));
     document.getElementById(id).classList.remove("hidden");
   }
 
@@ -572,13 +572,9 @@
   function updateMyScore(points = 0) {
     state.myScore += points;
     myScoreEl.textContent = state.myScore;
-
     const existing = state.leaderboard.find(p => p.name === state.username);
-    if (existing) {
-      existing.score = state.myScore;
-    } else if (state.username) {
-      state.leaderboard.push({ name: state.username, score: state.myScore });
-    }
+    if (existing) existing.score = state.myScore;
+    else if (state.username) state.leaderboard.push({ name: state.username, score: state.myScore });
     renderLeaderboard();
   }
 
@@ -636,17 +632,14 @@
 
   function addMarker(x, y, type) {
     const marker = document.createElement("div");
-    marker.classList.add("marker");
-    marker.classList.add(type);
+    marker.classList.add("marker", type);
     marker.style.left = `${x}px`;
     marker.style.top = `${y}px`;
     mapOverlay.appendChild(marker);
   }
 
-  // Point-in-polygon helper for SVG polygons
   function pointInPolygon(svgPoint, polygonElement) {
-    const polygon = polygonElement;
-    const points = polygon.points;
+    const points = polygonElement.points;
     const x = svgPoint.x;
     const y = svgPoint.y;
     let inside = false;
@@ -663,23 +656,30 @@
   function findCountryByPoint(evt) {
     const pt = countryOverlay.createSVGPoint();
     const rect = countryOverlay.getBoundingClientRect();
-    pt.x = ((evt.clientX - rect.left) / rect.width) * 1000;  // viewBox x
-    pt.y = ((evt.clientY - rect.top) / rect.height) * 500;   // viewBox y
-
+    pt.x = ((evt.clientX - rect.left) / rect.width) * 1000;
+    pt.y = ((evt.clientY - rect.top) / rect.height) * 500;
     const shapesGroup = document.getElementById("shapes");
     for (const node of shapesGroup.children) {
       if (node.tagName.toLowerCase() === "polygon") {
         if (pointInPolygon(pt, node)) {
-          const id = node.id.replace("shape-", "");
-          return id; // country name
+          return node.id.replace("shape-", "");
         }
       }
     }
     return null;
   }
 
+  function shuffledCopy(arr) {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  }
+
   /************************************
-   * Login / Username
+   * Login
    ************************************/
   btnStart.addEventListener("click", () => {
     const value = usernameInput.value.trim();
@@ -699,21 +699,47 @@
    ************************************/
   navLobbyBtn.addEventListener("click", () => showScreen("screen-lobby"));
   navLanguageBtn.addEventListener("click", () => showScreen("screen-language"));
-  navMapBtn.addEventListener("click", () => showScreen("screen-map"));
+  navMapBtn.addEventListener("click", () => {
+    showScreen("screen-map");
+    mapFeedbackEl.textContent = "";
+    mapQuestionEl.textContent = "Tap anywhere to start a round.";
+    clearMarkers();
+    state.mapRoundActive = false;
+    state.mapCurrent = null;
+    state.countryQueue = [];
+    if (mapTimerInterval) {
+      clearInterval(mapTimerInterval);
+      mapTimerInterval = null;
+      mapTimerEl.textContent = "Time: 0.0 s";
+    }
+  });
 
   /************************************
    * Language Game
    ************************************/
   let langTimerInterval = null;
 
+  function resetLanguageRoundQueue() {
+  // Shuffle all phrases, then take only the first N
+  const shuffled = shuffledCopy(languagePhrases);
+  state.langQueue = shuffled.slice(0, LANG_QUESTIONS_PER_ROUND);
+}
+
   function startLanguageRound() {
+    if (!state.langQueue || state.langQueue.length === 0) {
+      resetLanguageRoundQueue();
+    }
+    if (state.langQueue.length === 0) {
+      langFeedbackEl.textContent = "No language phrases available.";
+      return;
+    }
+
     langFeedbackEl.textContent = "";
     langFeedbackEl.className = "feedback";
     btnLangNext.classList.add("hidden");
     btnLangStart.disabled = true;
 
-    const index = Math.floor(Math.random() * languagePhrases.length);
-    state.langCurrent = languagePhrases[index];
+    state.langCurrent = state.langQueue.shift();
 
     langQuestionEl.textContent =
       `"${state.langCurrent.phrase}" means "${state.langCurrent.meaning}". Which language is this?`;
@@ -744,6 +770,17 @@
     }, 100);
   }
 
+  function endLanguageRoundIfDone() {
+    if (state.langQueue.length === 0) {
+      langFeedbackEl.textContent += " | Round complete! Returning to lobby...";
+      setTimeout(() => showScreen("screen-lobby"), 1500);
+      btnLangStart.disabled = false;
+      btnLangNext.classList.add("hidden");
+      return true;
+    }
+    return false;
+  }
+
   function handleLangAnswer(selectedLang) {
     if (!state.langCurrent || !state.langStartTime) return;
 
@@ -772,11 +809,18 @@
     }
 
     Array.from(langOptionsEl.children).forEach(btn => btn.disabled = true);
-    btnLangStart.disabled = false;
-    btnLangNext.classList.remove("hidden");
+
+    if (!endLanguageRoundIfDone()) {
+      btnLangStart.disabled = false;
+      btnLangNext.classList.remove("hidden");
+    }
   }
 
-  btnLangStart.addEventListener("click", startLanguageRound);
+  btnLangStart.addEventListener("click", () => {
+    resetLanguageRoundQueue();
+    startLanguageRound();
+  });
+
   btnLangNext.addEventListener("click", startLanguageRound);
 
   /************************************
@@ -784,13 +828,36 @@
    ************************************/
   let mapTimerInterval = null;
 
-  function startMapRound() {
-    mapFeedbackEl.textContent = "";
-    mapFeedbackEl.className = "feedback";
-    clearMarkers();
+  function resetCountryRoundQueue() {
+  // Shuffle all countries, then take only the first N
+  const shuffled = shuffledCopy(countries);
+  state.countryQueue = shuffled.slice(0, MAP_COUNTRIES_PER_ROUND);
+}
 
-    const idx = Math.floor(Math.random() * countries.length);
-    state.mapCurrent = countries[idx];
+  function startFirstCountryRound() {
+    resetCountryRoundQueue();
+    state.mapRoundActive = true;
+    loadNextCountry();
+  }
+
+  function loadNextCountry() {
+    clearMarkers();
+    mapFeedbackEl.textContent = "";
+
+    if (!state.countryQueue || state.countryQueue.length === 0) {
+      // Round done
+      state.mapRoundActive = false;
+      state.mapCurrent = null;
+      mapQuestionEl.textContent = "Round complete! Returning to lobby...";
+      if (mapTimerInterval) {
+        clearInterval(mapTimerInterval);
+        mapTimerInterval = null;
+      }
+      setTimeout(() => showScreen("screen-lobby"), 1500);
+      return;
+    }
+
+    state.mapCurrent = state.countryQueue.shift();
     mapQuestionEl.textContent =
       `Tap: ${state.mapCurrent.name} (Region: ${state.mapCurrent.region})`;
 
@@ -805,9 +872,14 @@
   }
 
   function handleMapGuess(evt) {
+    // If no round yet, start entire round (all countries)
+    if (!state.mapRoundActive) {
+      startFirstCountryRound();
+      // After starting, this click should still count as a guess for the first country
+      // So continue through without returning.
+    }
+
     if (!state.mapCurrent || !state.mapStartTime) {
-      mapFeedbackEl.textContent = "Press 'New Country' to start.";
-      mapFeedbackEl.classList.remove("correct", "incorrect");
       return;
     }
 
@@ -821,12 +893,10 @@
     const guessCountryName = findCountryByPoint(evt);
     const target = state.mapCurrent;
 
-    // Convert click to lat/lng for fallback distance
     const guessLatLng = clickToLatLng(evt, worldMapImg);
     const distanceKm = haversineDistance(guessLatLng.lat, guessLatLng.lng, target.lat, target.lng);
     const distanceText = distanceKm.toFixed(0);
 
-    // Marker positions
     const guessPx = latLngToPixel(guessLatLng.lat, guessLatLng.lng, worldMapImg);
     const targetPx = latLngToPixel(target.lat, target.lng, worldMapImg);
     addMarker(guessPx.x, guessPx.y, "guess");
@@ -836,16 +906,12 @@
     let message;
 
     if (guessCountryName === target.name) {
-      // If click falls inside the rough polygon for the target country,
-      // treat as "exact" hit regardless of real center distance.
       points = 10;
       message =
-        `Excellent! You clicked inside ${target.name}. Full 10 points in ${formatTime(elapsedSec)} s. ` +
-        `(Red = your guess, Green = country center)`;
+        `Excellent! You clicked inside ${target.name}. Full 10 points in ${formatTime(elapsedSec)} s.`;
       mapFeedbackEl.classList.remove("incorrect");
       mapFeedbackEl.classList.add("correct");
     } else {
-      // Distance-based scoring fallback
       if (distanceKm <= 300) points = 10;
       else if (distanceKm <= 1000) points = 7;
       else if (distanceKm <= 3000) points = 4;
@@ -854,13 +920,13 @@
       if (points > 0) {
         message =
           `Nice! You were about ${distanceText} km from ${target.name}. ` +
-          `You earned ${points} point(s) in ${formatTime(elapsedSec)} s. (Red = your guess, Green = country center)`;
+          `You earned ${points} point(s) in ${formatTime(elapsedSec)} s.`;
         mapFeedbackEl.classList.remove("incorrect");
         mapFeedbackEl.classList.add("correct");
       } else {
         message =
           `You were about ${distanceText} km away from ${target.name}. ` +
-          `No points this time. Time: ${formatTime(elapsedSec)} s. (Red = your guess, Green = country center)`;
+          `No points this time. Time: ${formatTime(elapsedSec)} s.`;
         mapFeedbackEl.classList.remove("correct");
         mapFeedbackEl.classList.add("incorrect");
       }
@@ -869,15 +935,18 @@
     mapFeedbackEl.textContent = message;
     if (points > 0) updateMyScore(points);
 
+    // Move to next country automatically
     state.mapCurrent = null;
     state.mapStartTime = null;
+
+    // Brief pause so they can see markers, then load next
+    setTimeout(loadNextCountry, 900);
   }
 
-  btnMapStart.addEventListener("click", startMapRound);
   worldMapImg.addEventListener("click", handleMapGuess);
 
   /************************************
-   * Initialization
+   * Init
    ************************************/
   renderLeaderboard();
 </script>
