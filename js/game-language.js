@@ -112,6 +112,7 @@ function handleLangAnswer(selectedLang) {
     btnLangStart.disabled = false;
     btnLangNext.classList.remove("hidden");
   }
+  setTimeout(startLanguageRound, 900);
 }
 
 // Button handlers
