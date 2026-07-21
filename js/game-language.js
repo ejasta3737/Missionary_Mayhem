@@ -29,7 +29,10 @@ function startLanguageRound() {
 
   langFeedbackEl.textContent = "";
   langFeedbackEl.className = "feedback";
+
+  // Hide Next button and hide Start during the round
   btnLangNext.classList.add("hidden");
+  btnLangStart.classList.add("hidden");
   btnLangStart.disabled = true;
 
   // Next phrase from queue
@@ -69,9 +72,11 @@ function startLanguageRound() {
 function endLanguageRoundIfDone() {
   if (state.langQueue.length === 0) {
     langFeedbackEl.textContent += " | Round complete! Returning to lobby...";
-    setTimeout(() => showScreen("screen-lobby"), 1500);
+    // Show Start again so they can start a new round later
+    btnLangStart.classList.remove("hidden");
     btnLangStart.disabled = false;
     btnLangNext.classList.add("hidden");
+    setTimeout(() => showScreen("screen-lobby"), 1500);
     return true;
   }
   return false;
@@ -107,18 +112,20 @@ function handleLangAnswer(selectedLang) {
   // Disable all option buttons
   Array.from(langOptionsEl.children).forEach(btn => btn.disabled = true);
 
-  // If the round is finished, go back to lobby; otherwise enable Next
-  if (!endLanguageRoundIfDone()) {
-    btnLangStart.disabled = false;
-    btnLangNext.classList.remove("hidden");
+  // If the round is finished, go back to lobby; otherwise auto-advance
+  if (endLanguageRoundIfDone()) {
+    return;
   }
+
+  // Automatically move to the next question after a short delay
   setTimeout(startLanguageRound, 900);
 }
 
-// Button handlers
+// Button handler: only starts a new round
 btnLangStart.addEventListener("click", () => {
   resetLanguageRoundQueue();
   startLanguageRound();
 });
 
-btnLangNext.addEventListener("click", startLanguageRound);
+// We no longer use btnLangNext; it can stay hidden
+// btnLangNext.addEventListener("click", startLanguageRound);
